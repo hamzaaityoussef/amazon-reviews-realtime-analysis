@@ -4,6 +4,6 @@ WORKDIR /app
 
 COPY . .
 
-RUN pip install --no-cache-dir kafka-python
+RUN pip install --no-cache-dir kafka-python pymongo
 
 CMD ["python", "producer.py"]
