@@ -49,7 +49,9 @@ services:
     command: python producer.py
 
   consumer:
-    build: ./kafka
+    build:
+      context: .
+      dockerfile: kafka/consumer.Dockerfile
     depends_on:
       kafka:
         condition: service_healthy
