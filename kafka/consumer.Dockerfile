@@ -9,14 +9,14 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-RUN pip install --no-cache-dir pymongo pyspark kafka-python textblob
+RUN pip install --no-cache-dir pymongo pyspark kafka-python textblob numpy
 
 # Copy the model files
 COPY model/logistic_regression_model /app/model/logistic_regression_model
 
 # Copy the consumer code and preprocess script
 COPY kafka/consumer.py .
-COPY utils/preprocessing.py .
+COPY utils /app/utils
 
 # Set environment variable for Java (ensures PySpark finds Java 17)
 ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
