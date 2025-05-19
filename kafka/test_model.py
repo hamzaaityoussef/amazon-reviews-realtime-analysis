@@ -1,13 +1,11 @@
 import logging
+import spacy
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import udf, col
+from pyspark.sql.types import ArrayType, StringType
+from pyspark.ml.feature import Tokenizer, HashingTF, IDF , IDFModel
 from pyspark.ml.classification import LogisticRegressionModel
-from pyspark.sql.functions import col
-from pyspark.sql.types import StringType, FloatType
-import re
-import string
-from textblob import TextBlob
-from pyspark.ml.feature import Tokenizer, HashingTF, IDF
-from pyspark.sql.functions import udf
+import os
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -16,120 +14,98 @@ logger = logging.getLogger(__name__)
 # Initialize Spark
 logger.info("Initializing Spark session")
 spark = SparkSession.builder \
-    .appName("ModelTest") \
+    .appName("SpacyModelTest") \
     .master("local[*]") \
-    .config("spark.driver.memory", "1g") \
-    .config("spark.executor.memory", "1g") \
+    .config("spark.driver.memory", "2g") \
+    .config("spark.executor.memory", "2g") \
+    .config("spark.python.worker.connectionTimeout", "60000") \
     .getOrCreate()
 logger.info(f"Spark version: {spark.version}")
 
-# Define preprocessing functions (from preprocess.py)
-STOP_WORDS = [
-    'yourselves', 'between', 'whom', 'itself', 'is', "she's", 'up', 'herself', 'here', 'your', 'each',
-    'we', 'he', 'my', "you've", 'having', 'in', 'both', 'for', 'themselves', 'are', 'them', 'other',
-    'and', 'an', 'during', 'their', 'can', 'yourself', 'she', 'until', 'so', 'these', 'ours', 'above',
-    'what', 'while', 'have', 're', 'more', 'only', "needn't", 'when', 'just', 'that', 'were', "don't",
-    'very', 'should', 'any', 'y', 'isn', 'who', 'a', 'they', 'to', 'too', "should've", 'has', 'before',
-    'into', 'yours', "it's", 'do', 'against', 'on', 'now', 'her', 've', 'd', 'by', 'am', 'from',
-    'about', 'further', "that'll", "you'd", 'you', 'as', 'how', 'been', 'the', 'or', 'doing', 'such',
-    'his', 'himself', 'ourselves', 'was', 'through', 'out', 'below', 'own', 'myself', 'theirs',
-    'me', 'why', 'once', 'him', 'than', 'be', 'most', "you'll", 'same', 'some', 'with', 'few', 'it',
-    'at', 'after', 'its', 'which', 'there', 'our', 'this', 'hers', 'being', 'did', 'of', 'had', 'under',
-    'over', 'again', 'where', 'those', 'then', "you're", 'i', 'because', 'does', 'all'
+# Load spaCy model
+logger.info("Loading spaCy model")
+try:
+    nlp = spacy.load("en_core_web_sm")
+    logger.info("spaCy model loaded successfully")
+except Exception as e:
+    logger.error(f"Failed to load spaCy model: {str(e)}")
+    spark.stop()
+    exit(1)
+
+# Define lemmatization UDF
+def lemmatize(tokens):
+    if not tokens or not isinstance(tokens, (list, tuple)) or len(tokens) == 0:
+        return []
+    text = " ".join([t for t in tokens if isinstance(t, str)])
+    doc = nlp(text)
+    return [token.lemma_ for token in doc if not token.is_punct]
+
+lemmatize_udf = udf(lemmatize, ArrayType(StringType()))
+
+# Sample reviews (positive, negative, neutral)
+logger.info("Creating sample reviews")
+sample_texts = [
+    ("This guitar is amazing! I love it!", "positive"),  # Positive
+    ("I hate this product, it broke immediately!", "negative"),  # Negative
+    ("It's normal, nothing special.", "neutral")  # Neutral
 ]
+df = spark.createDataFrame([(i, text, label) for i, (text, label) in enumerate(sample_texts)], ["id", "reviews", "expected_label"])
+logger.info("Sample reviews DataFrame created")
 
-def clean_review(text):
-    if not text or text.isspace():
-        return ""
-    text = str(text).lower()
-    text = re.sub(r'\[.*?\]', '', text)
-    text = re.sub(r'https?://\S+|www\.\S+', '', text)
-    text = re.sub(r'<.*?>+', '', text)
-    text = re.sub(r'[%s]' % re.escape(string.punctuation), '', text)
-    text = re.sub(r'\n', '', text)
-    text = re.sub(r'\w*\d\w*', '', text)
-    return text
+# Tokenize
+logger.info("Tokenizing reviews")
+tokenizer = Tokenizer(inputCol="reviews", outputCol="words")
+df_tokenized = tokenizer.transform(df)
 
-def remove_stopwords(text):
-    if not text or text.isspace():
-        return ""
-    words = text.split()
-    filtered = [word for word in words if word not in STOP_WORDS]
-    return ' '.join(filtered)
+# Lemmatize
+logger.info("Lemmatizing tokens")
+df_tokenized = df_tokenized.withColumn("lemmatized", lemmatize_udf(col("words")))
 
-def get_polarity(text):
-    try:
-        return float(TextBlob(str(text)).sentiment.polarity)
-    except:
-        return 0.0
+# Vectorization
+logger.info("Vectorizing lemmatized text")
+hashing_tf = HashingTF(inputCol="lemmatized", outputCol="raw_features", numFeatures=10000)
+df_featurized = hashing_tf.transform(df_tokenized)
 
-# Register UDFs
-clean_review_udf = udf(clean_review, StringType())
-remove_stopwords_udf = udf(remove_stopwords, StringType())
-polarity_udf = udf(get_polarity, FloatType())
+idf = IDF(inputCol="raw_features", outputCol="tfidf")  # LogisticRegressionModel expects "features"
+# idf_model = idf.fit(df_featurized)
+# df_final = idf_model.transform(df_featurized)
 
-def preprocess_text(spark, text_data, include_polarity=True):
-    logger.info("Preprocessing text")
-    if isinstance(text_data, list):
-        df = spark.createDataFrame([(text,) for text in text_data], ["text"])
-    else:
-        df = text_data
+idf_model_path = "./model/idf_model"
+logger.info(f"Loading IDF model from {idf_model_path}")
+try:
+    if not os.path.exists(idf_model_path):
+        logger.error(f"IDF model path does not exist: {idf_model_path}")
+        spark.stop()
+        exit(1)
+    idf_model = IDFModel.load(idf_model_path)
+    logger.info("IDF model loaded successfully")
+except Exception as e:
+    logger.error(f"Failed to load IDF model: {str(e)}")
+    spark.stop()
+    exit(1)
 
-    df = df.withColumn("cleaned_text", clean_review_udf(col("text")))
-    df = df.withColumn("processed_text", remove_stopwords_udf(col("cleaned_text")))
-    if include_polarity:
-        df = df.withColumn("polarity", polarity_udf(col("processed_text")))
-    
-    tokenizer = Tokenizer(inputCol="processed_text", outputCol="words")
-    hashing_tf = HashingTF(inputCol="words", outputCol="raw_features", numFeatures=10000)
-    idf = IDF(inputCol="raw_features", outputCol="tfidf")
-    
-    pipeline = Pipeline(stages=[tokenizer, hashing_tf, idf])
-    pipeline_model = pipeline.fit(df)
-    df_transformed = pipeline_model.transform(df)
-    
-    return df_transformed
 
-def predict_sentiment(model, text):
-    logger.info(f"Predicting sentiment for text: {text[:50]}...")
-    try:
-        df = preprocess_text(spark, [text], include_polarity=True)
-        processed_text = df.select("processed_text").collect()[0][0]
-        logger.info(f"Preprocessed text: {processed_text}")
-        
-        prediction = model.transform(df)
-        result = prediction.select("prediction").collect()[0][0]
-        sentiment_map = {0.0: "negative", 1.0: "positive", 2.0: "neutral"}
-        sentiment = sentiment_map.get(result, "unknown")
-        polarity = df.select("polarity").collect()[0][0]
-        logger.info(f"Predicted sentiment: {sentiment}, Polarity: {polarity}")
-        return sentiment, polarity
-    except Exception as e:
-        logger.error(f"Error predicting sentiment: {str(e)}")
-        return "unknown", 0.0
+  # <-- path to the saved model
+df_final = idf_model.transform(df_featurized)
 
-# Load and test the model
+# Load model
 model_path = "./model/logistic_regression_model"
 logger.info(f"Loading model from {model_path}")
 try:
-    model = LogisticRegressionModel.load(model_path)
+    loaded_model = LogisticRegressionModel.load(model_path)
     logger.info("Model loaded successfully")
 except Exception as e:
     logger.error(f"Failed to load model: {str(e)}")
     spark.stop()
     exit(1)
 
-# Test with sample texts
-sample_texts = [
-    "This guitar is amazing! I love it!",
-    "The product was terrible and broke after one use.",
-    "It's okay, nothing special."
-]
+# Predict
+logger.info("Making predictions")
+predictions = loaded_model.transform(df_final)
 
-for text in sample_texts:
-    sentiment, polarity = predict_sentiment(model, text)
-    print(f"Text: {text}")
-    print(f"Sentiment: {sentiment}, Polarity: {polarity}\n")
+# Show predictions with expected labels
+logger.info("Displaying predictions")
+predictions.select("reviews", "expected_label", "prediction", "probability").show(truncate=False)
 
 # Clean up
 spark.stop()
