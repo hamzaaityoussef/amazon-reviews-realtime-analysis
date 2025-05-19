@@ -1,0 +1,8 @@
+# we dont need this in docker becuse we use direct pip install in dockerfile
+pymongo==4.6.3
+pyspark==3.5.3
+kafka-python==2.0.2
+textblob==0.18.0
+numpy==1.26.4
+pandas==2.2.2
+spacy==3.7.2
