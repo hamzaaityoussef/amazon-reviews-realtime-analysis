@@ -36,7 +36,7 @@ def stream_reviews():
                     print(f"Sent: {review['reviewerID'][:8]}...")
                 else:
                     print(f"Sent: polarity={review.get('polarity', 'unknown')}")
-                time.sleep(0.1)
+                time.sleep(1)
             except Exception as e:
                 print(f"Error: {str(e)}")
                 continue
