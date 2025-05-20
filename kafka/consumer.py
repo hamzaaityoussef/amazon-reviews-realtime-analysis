@@ -138,18 +138,24 @@ def save_to_mongo():
             data = message.value
             logger.info(f"Received message: {data}")
             
-            # Add sentiment prediction and polarity
+            # Save raw data to MongoDB first
+            result = collection.insert_one(data)
+            doc_id = result.inserted_id
+            logger.info(f"Inserted raw data with ID: {doc_id}")
+            
+            # Add preprocessed fields
             print("testetstetetdet")
             data['predicted_sentiment'], polarity = predict_sentiment(data['reviewText'])
-            data['polarity'] = polarity if polarity is not None else 0.0  # Default to 0.0 if None
+            data['polarity'] = polarity if polarity is not None else 0.0
             
-            # Save to MongoDB (uncomment when ready)
-            # collection.insert_one(data)
-            identifier = data.get('polarity', 'unknown')
-            logger.info(f"Saved: polarity={identifier}, predicted_sentiment={data.get('predicted_sentiment', 'unknown')}")
+            # Update the same document with preprocessed fields
+            collection.update_one({'_id': doc_id}, {'$set': {
+                'predicted_sentiment': data['predicted_sentiment'],
+                'polarity': data['polarity']
+            }})
+            logger.info(f"Updated document with ID: {doc_id} - polarity={data['polarity']}, predicted_sentiment={data['predicted_sentiment']}")
         except Exception as e:
-            logger.error(f"Failed to save: {str(e)}")
-
+            logger.error(f"Failed to save or update: {str(e)}")
             
 
 if __name__ == "__main__":
