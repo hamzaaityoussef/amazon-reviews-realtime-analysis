@@ -2,7 +2,7 @@ from pymongo import MongoClient
 from kafka import KafkaConsumer
 from kafka.errors import NoBrokersAvailable
 from pyspark.sql import SparkSession
-from pyspark.ml import LogisticRegressionModel, PipelineModel
+from pyspark.ml.classification import LogisticRegressionModel
 from pyspark.ml.feature import Tokenizer, HashingTF, IDF, IDFModel
 from pyspark.sql.functions import udf, col
 from pyspark.sql.types import ArrayType, StringType
@@ -22,29 +22,25 @@ logger.info("Initializing Spark session")
 spark = SparkSession.builder \
     .appName("ReviewConsumer") \
     .master("local[*]") \
-    .config("spark.driver.memory", os.getenv("SPARK_DRIVER_MEMORY", "1g")) \
-    .config("spark.executor.memory", os.getenv("SPARK_WORKER_MEMORY", "1g")) \
+    .config("spark.driver.memory", os.getenv("SPARK_DRIVER_MEMORY", "2g")) \
+    .config("spark.executor.memory", os.getenv("SPARK_WORKER_MEMORY", "2g")) \
     .config("spark.python.worker.connectionTimeout", "60000") \
     .getOrCreate()
 logger.info(f"Spark version: {spark.version}")
-
-# Load spaCy model
-logger.info("Loading spaCy model")
-try:
-    nlp = spacy.load("en_core_web_sm")
-    logger.info("spaCy model loaded successfully")
-except Exception as e:
-    logger.error(f"Failed to load spaCy model: {str(e)}")
-    spark.stop()
-    exit(1)
 
 # Define lemmatization UDF
 def lemmatize(tokens):
     if not tokens or not isinstance(tokens, (list, tuple)) or len(tokens) == 0:
         return []
-    text = " ".join([t for t in tokens if isinstance(t, str)])
-    doc = nlp(text)
-    return [token.lemma_ for token in doc if not token.is_punct]
+    try:
+        # Load spaCy model inside the UDF to avoid serialization issues
+        nlp = spacy.load("en_core_web_sm", disable=["parser", "ner"])  # Disable unused components for performance
+        text = " ".join([t for t in tokens if isinstance(t, str)])
+        doc = nlp(text)
+        return [token.lemma_ for token in doc if not token.is_punct]
+    except Exception as e:
+        logger.error(f"Error in lemmatize UDF: {str(e)}")
+        return []
 
 lemmatize_udf = udf(lemmatize, ArrayType(StringType()))
 
@@ -126,8 +122,8 @@ def predict_sentiment(text):
         # Transform with IDF
         df_final = idf_model.transform(df_featurized)
 
-        # Rename 'tfidf' to 'features' (LogisticRegressionModel expects 'features')
-        df_final = df_final.withColumnRenamed("tfidf", "features")
+        # Remove the renaming step since the model expects "tfidf"
+        # df_final = df_final.withColumnRenamed("tfidf", "features")
 
         # Make prediction
         prediction = model.transform(df_final)
@@ -139,6 +135,8 @@ def predict_sentiment(text):
     except Exception as e:
         logger.error(f"Error predicting sentiment: {str(e)}")
         return "unknown"
+
+
 
 def save_to_mongo():
     consumer = create_consumer()
