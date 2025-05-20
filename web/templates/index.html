@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sentiment Analysis Visualization</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100 p-6">
+    <h1 class="text-3xl font-bold mb-4">Sentiment Analysis of Amazon Reviews</h1>
+    
+    <!-- Pie Chart -->
+    <div class="mb-6">
+        <canvas id="sentimentChart" data-values="{{ positive }},{{ negative }},{{ neutral }}"></canvas>
+    </div>
+    
+    <!-- Table of Reviews -->
+    <div class="overflow-x-auto">
+        <table class="min-w-full bg-white border border-gray-300">
+            <thead>
+                <tr class="bg-gray-200">
+                    <th class="border p-2">Reviewer ID</th>
+                    <th class="border p-2">Review Text</th>
+                    <th class="border p-2">Sentiment</th>
+                    <th class="border p-2">Polarity</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for review in reviews %}
+                <tr>
+                    <td class="border p-2">{{ review['reviewerID'] }}</td>
+                    <td class="border p-2">{{ review['reviewText'][:100] }}...</td>
+                    <td class="border p-2">{{ review['predicted_sentiment'] }}</td>
+                    <td class="border p-2">{{ review['polarity'] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('sentimentChart').getContext('2d');
+        const values = document.getElementById('sentimentChart').dataset.values.split(',').map(Number);
+        
+        new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: ['Positive', 'Negative', 'Neutral'],
+                datasets: [{
+                    data: values,
+                    backgroundColor: ['#4CAF50', '#F44336', '#FFEB3B']
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Sentiment Distribution'
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
