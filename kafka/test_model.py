@@ -3,7 +3,7 @@ import spacy
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import udf, col
 from pyspark.sql.types import ArrayType, StringType
-from pyspark.ml.feature import Tokenizer, HashingTF, IDF , IDFModel
+from pyspark.ml.feature import Tokenizer, HashingTF, IDF, IDFModel
 from pyspark.ml.classification import LogisticRegressionModel
 import os
 
@@ -42,12 +42,12 @@ def lemmatize(tokens):
 
 lemmatize_udf = udf(lemmatize, ArrayType(StringType()))
 
-# Sample reviews (positive, negative, neutral)
+# Sample reviews (positive, negative, neutral) from provided test cases
 logger.info("Creating sample reviews")
 sample_texts = [
-    ("This guitar is amazing! I love it!", "positive"),  # Positive
-    ("I hate this product, it broke immediately!", "negative"),  # Negative
-    ("It's normal, nothing special.", "neutral")  # Neutral
+    ("I absolutely love this product! It works perfectly, arrived quickly, and the quality is amazing. Highly recommend to everyone!", "positive"),  # Positive
+    ("This product is awful. It broke within a day, and the quality is terrible. Waste of money, do not buy!", "negative"),  # Negative
+    ("The product is okay. It does the job, but nothing special. I expected better for the price, but it’s not bad either.", "neutral")  # Neutral
 ]
 df = spark.createDataFrame([(i, text, label) for i, (text, label) in enumerate(sample_texts)], ["id", "reviews", "expected_label"])
 logger.info("Sample reviews DataFrame created")
@@ -66,10 +66,7 @@ logger.info("Vectorizing lemmatized text")
 hashing_tf = HashingTF(inputCol="lemmatized", outputCol="raw_features", numFeatures=10000)
 df_featurized = hashing_tf.transform(df_tokenized)
 
-idf = IDF(inputCol="raw_features", outputCol="tfidf")  # LogisticRegressionModel expects "features"
-# idf_model = idf.fit(df_featurized)
-# df_final = idf_model.transform(df_featurized)
-
+# Load IDF model
 idf_model_path = "./model/idf_model"
 logger.info(f"Loading IDF model from {idf_model_path}")
 try:
@@ -84,8 +81,7 @@ except Exception as e:
     spark.stop()
     exit(1)
 
-
-  # <-- path to the saved model
+# Apply IDF transformation
 df_final = idf_model.transform(df_featurized)
 
 # Load model
