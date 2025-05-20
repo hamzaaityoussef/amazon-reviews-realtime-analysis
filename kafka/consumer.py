@@ -6,6 +6,7 @@ from pyspark.ml.classification import LogisticRegressionModel
 from pyspark.ml.feature import Tokenizer, HashingTF, IDF, IDFModel
 from pyspark.sql.functions import udf, col
 from pyspark.sql.types import ArrayType, StringType
+from pyspark.ml import Pipeline
 import spacy
 import json
 import time
@@ -100,41 +101,32 @@ def create_consumer():
 
 def predict_sentiment(text):
     logger.info(f"Predicting sentiment for text: {text[:50]}...")
+    if not text or not isinstance(text, str):
+        logger.error("Invalid text input for prediction")
+        return "unknown", None
     try:
-        # Preprocess the text using the provided utility
         df = preprocess_text(spark, [text], include_polarity=True)
-        
-        # Log preprocessed text
         processed_text = df.select("processed_text").collect()[0][0]
         logger.info(f"Preprocessed text: {processed_text}")
 
-        # Tokenize
-        tokenizer = Tokenizer(inputCol="processed_text", outputCol="words")
-        df_tokenized = tokenizer.transform(df)
+        # Use the existing 'tfidf' column from preprocess_text
+        df_final = df
 
-        # Lemmatize
-        df_tokenized = df_tokenized.withColumn("lemmatized", lemmatize_udf(col("words")))
-
-        # Vectorization with HashingTF
-        hashing_tf = HashingTF(inputCol="lemmatized", outputCol="raw_features", numFeatures=10000)
-        df_featurized = hashing_tf.transform(df_tokenized)
-
-        # Transform with IDF
-        df_final = idf_model.transform(df_featurized)
-
-        # Remove the renaming step since the model expects "tfidf"
-        # df_final = df_final.withColumnRenamed("tfidf", "features")
-
-        # Make prediction
+        # Make prediction using the preloaded model
         prediction = model.transform(df_final)
         result = prediction.select("prediction").collect()[0][0]
-        sentiment_map = {0.0: "negative", 1.0: "positive", 2.0: "neutral"}
+        sentiment_map = {0.0: "positive", 1.0: "neutral", 2.0: "negative"}
         sentiment = sentiment_map.get(result, "unknown")
         logger.info(f"Predicted sentiment: {sentiment}")
-        return sentiment
+
+        # Extract polarity from the DataFrame
+        polarity = df.select("polarity").collect()[0][0]
+        return sentiment, polarity
     except Exception as e:
         logger.error(f"Error predicting sentiment: {str(e)}")
-        return "unknown"
+        return "unknown", None
+
+
 
 
 
@@ -145,21 +137,20 @@ def save_to_mongo():
         try:
             data = message.value
             logger.info(f"Received message: {data}")
-            # Add sentiment prediction if text is available
-            if 'text' in data:
-                data['predicted_sentiment'] = predict_sentiment(data['text'])
-                # Add polarity
-                df = preprocess_text(spark, [data['text']], include_polarity=True)
-                polarity = df.select("polarity").collect()[0][0]
-                data['polarity'] = polarity
+            
+            # Add sentiment prediction and polarity
+            print("testetstetetdet")
+            data['predicted_sentiment'], polarity = predict_sentiment(data['reviewText'])
+            data['polarity'] = polarity if polarity is not None else 0.0  # Default to 0.0 if None
+            
             # Save to MongoDB (uncomment when ready)
             # collection.insert_one(data)
             identifier = data.get('polarity', 'unknown')
             logger.info(f"Saved: polarity={identifier}, predicted_sentiment={data.get('predicted_sentiment', 'unknown')}")
-        except KeyError as e:
-            logger.error(f"Missing key: {str(e)}")
         except Exception as e:
             logger.error(f"Failed to save: {str(e)}")
+
+            
 
 if __name__ == "__main__":
     try:
