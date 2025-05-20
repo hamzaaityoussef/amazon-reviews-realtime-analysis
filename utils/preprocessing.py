@@ -4,6 +4,7 @@ from pyspark.sql.functions import udf, col
 from pyspark.sql.types import StringType, FloatType
 from textblob import TextBlob
 from pyspark.ml.feature import Tokenizer, HashingTF, IDF
+from pyspark.ml import Pipeline
 
 # Liste des mots vides (stop words) utilisée dans le notebook
 STOP_WORDS = [
