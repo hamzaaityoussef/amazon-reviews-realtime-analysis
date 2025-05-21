@@ -2,12 +2,13 @@ import json
 from pymongo import MongoClient
 from pymongo.errors import BulkWriteError
 import time
+import os
 
 # MongoDB configuration
-MONGO_URI = "mongodb://mongodb:27017/"
+MONGO_URI = "mongodb://localhost:27017/"
 DB_NAME = "amazon_reviews"
 COLLECTION_NAME = "reviews"
-DATA_FILE = "data/combined_data.json"
+DATA_FILE = "combined_data.json"  # Updated path
 
 def connect_to_mongo():
     """Establish connection to MongoDB"""
@@ -24,7 +25,11 @@ def connect_to_mongo():
 def load_data_to_mongo(collection):
     """Load data from JSON file to MongoDB"""
     try:
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
+        # Get the absolute path to the data file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        data_file_path = os.path.join(current_dir, DATA_FILE)
+        
+        with open(data_file_path, 'r', encoding='utf-8') as f:
             # Read all lines and parse JSON
             data = [json.loads(line) for line in f]
             

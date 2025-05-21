@@ -63,15 +63,15 @@ services:
       - PYTHONUNBUFFERED=1
     command: python consumer.py
 
-  mongo_loader:
-    build: ./data
-    depends_on:
-      - mongodb
-    volumes:
-      - ./data:/app/data
-    environment:
-      - PYTHONUNBUFFERED=1
-    command: python mongo_loader.py
+  # mongo_loader:
+  #   build: ./data
+  #   depends_on:
+  #     - mongodb
+  #   volumes:
+  #     - ./data:/app/data
+  #   environment:
+  #     - PYTHONUNBUFFERED=1
+  #   command: python mongo_loader.py
 
   web:
     build:
