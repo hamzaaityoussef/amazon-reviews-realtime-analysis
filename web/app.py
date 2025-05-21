@@ -1,13 +1,16 @@
 from flask import Flask, render_template, request, jsonify
 from pymongo import MongoClient
 import logging
-from datetime import datetime, timedelta, timezone
-from collections import defaultdict
+import sys
+import os
+import json
+from datetime import datetime, timezone, timedelta
 
-# Set up logging
+# Set up logging with more detailed format
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
+    stream=sys.stdout
 )
 logger = logging.getLogger(__name__)
 
@@ -19,56 +22,53 @@ client = MongoClient("mongodb://mongodb:27017/")
 db = client.amazon_reviews
 collection = db.reviews
 
+# Global variable to track the last review index
+last_review_index = 0
+
+def load_predicted_data():
+    try:
+        with open('/app/data/predicted_data.json', 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading predicted data: {e}")
+        return []
+
 @app.route('/')
 def index():
-    # Get pagination parameters
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 10, type=int)
-    
-    # Calculate skip value for pagination
-    skip = (page - 1) * per_page
-    
-    # Fetch paginated reviews
-    reviews = list(collection.find({}).skip(skip).limit(per_page))
-    
-    # Get total count for pagination
-    total_reviews = collection.count_documents({})
-    total_pages = (total_reviews + per_page - 1) // per_page
-    
-    # Convert ObjectId to string for JSON serialization if needed
-    for review in reviews:
-        review['_id'] = str(review['_id'])
-        # Also ensure reviewText is included if needed for modal
-        if 'reviewText' not in review:
-            original_review = collection.find_one({'_id': review['_id']})
-            if original_review:
-                review['reviewText'] = original_review.get('reviewText', '')
+    # For the main page, we'll just render the template
+    # The data will be loaded via AJAX calls
+    return render_template('index.html')
 
-    # Calculate sentiment distribution for the initial load
-    positive = len(
-        [r for r in reviews if r.get('predicted_sentiment') == 'positive']
-    )
-    negative = len(
-        [r for r in reviews if r.get('predicted_sentiment') == 'negative']
-    )
-    neutral = len(
-        [r for r in reviews if r.get('predicted_sentiment') == 'neutral']
-    )
+@app.route('/offline-dashboard')
+def offline_dashboard():
+    # Load data from JSON file
+    reviews = load_predicted_data()
+    
+    # Calculate sentiment distribution
+    positive = sum(1 for r in reviews if r.get('predicted_sentiment') == 'positive')
+    negative = sum(1 for r in reviews if r.get('predicted_sentiment') == 'negative')
+    neutral = sum(1 for r in reviews if r.get('predicted_sentiment') == 'neutral')
+    
+    # Pagination
+    page = request.args.get('page', 1, type=int)
+    per_page = 10
+    total_pages = (len(reviews) + per_page - 1) // per_page
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    
+    # Get current page reviews
+    current_reviews = reviews[start_idx:end_idx]
     
     # Calculate page range for pagination
-    start_page = max(1, page - 2)
-    end_page = min(total_pages + 1, page + 3)
-    page_range = range(start_page, end_page)
+    page_range = list(range(max(1, page - 2), min(total_pages + 1, page + 3)))
     
-    # Render HTML template with all reviews and pagination info
-    return render_template('index.html', 
-                         reviews=reviews, 
+    return render_template('offline_dashboard.html',
+                         reviews=current_reviews,
                          positive=positive, 
                          negative=negative, 
                          neutral=neutral,
                          current_page=page,
                          total_pages=total_pages,
-                         per_page=per_page,
                          page_range=page_range)
 
 @app.route('/search')
@@ -166,44 +166,61 @@ def product_sentiment_distribution():
 
 @app.route('/recent_reviews')
 def recent_reviews():
-    # Get the last hour of reviews using unixReviewTime
-    end_time = datetime.now(timezone.utc)
-    start_time = end_time - timedelta(hours=1)
-    
-    # Convert datetime to Unix timestamp (seconds)
-    start_unix = int(start_time.timestamp())
-    end_unix = int(end_time.timestamp())
-
-    # Query reviews within the time range using unixReviewTime
-    # Exclude large fields like reviewText, helpful, summary initially for performance
-    reviews = list(collection.find({
-        'unixReviewTime': {
-            '$gte': start_unix,
-            '$lte': end_unix
-        }
-    }, {'_id': 1, 'reviewerID': 1, 'asin': 1, 'predicted_sentiment': 1, 'polarity': 1, 'unixReviewTime': 1}))
-    
-    # Prepare data for frontend - fetch reviewText separately if needed for modal
-    processed_reviews = []
-    for review in reviews:
-        # Convert unixReviewTime to ISO format string for the frontend
-        timestamp = datetime.fromtimestamp(review['unixReviewTime'], tz=timezone.utc)
+    global last_review_index
+    try:
+        # Load the latest data
+        reviews = load_predicted_data()
         
-        # Fetch full review details including reviewText for the modal
-        full_review = collection.find_one({'_id': review['_id']})
-        review_text = full_review.get('reviewText', '') if full_review else ''
-
-        processed_reviews.append({
-            '_id': str(review['_id']),
-            'reviewerID': review.get('reviewerID'),
-            'asin': review.get('asin'),
-            'predicted_sentiment': review.get('predicted_sentiment'),
-            'polarity': review.get('polarity'),
-            'timestamp': timestamp.isoformat(), # Use consistent 'timestamp' field name for frontend
-            'reviewText': review_text # Include reviewText here as it's needed for modal
+        if not reviews:
+            return jsonify({
+                'reviews': [],
+                'sentiment_counts': {'positive': 0, 'negative': 0, 'neutral': 0, 'total': 0},
+                'product_counts': []
+            })
+        
+        # Get the next review
+        if last_review_index >= len(reviews):
+            last_review_index = 0  # Reset to start if we've shown all reviews
+        
+        current_review = reviews[last_review_index]
+        last_review_index += 1
+        
+        # Calculate sentiment distribution for all reviews
+        total_positive = sum(1 for r in reviews if r.get('predicted_sentiment', '').lower() == 'positive')
+        total_negative = sum(1 for r in reviews if r.get('predicted_sentiment', '').lower() == 'negative')
+        total_neutral = sum(1 for r in reviews if r.get('predicted_sentiment', '').lower() == 'neutral')
+        total_reviews = len(reviews)
+        
+        # Calculate product counts for all reviews
+        product_counts = {}
+        for review in reviews:
+            asin = review.get('asin')
+            if asin:
+                product_counts[asin] = product_counts.get(asin, 0) + 1
+        
+        # Get top 10 products
+        top_products = [
+            {'asin': asin, 'count': count} 
+            for asin, count in sorted(
+                product_counts.items(),
+                key=lambda x: x[1],
+                reverse=True
+            )[:10]
+        ]
+        
+        return jsonify({
+            'reviews': [current_review],  # Return only one review
+            'sentiment_counts': {
+                'positive': total_positive,
+                'negative': total_negative,
+                'neutral': total_neutral,
+                'total': total_reviews
+            },
+            'product_counts': top_products
         })
-    
-    return jsonify(processed_reviews)
+    except Exception as e:
+        logger.error(f"Error in recent_reviews: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/asin_review_counts')
 def asin_review_counts():

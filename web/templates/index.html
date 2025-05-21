@@ -2,548 +2,371 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title> Real Time Amazon Reviews Analysis</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
-    <script src="https://cdn.jsdelivr.net/npm/date-fns/cdn.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.umd.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real Time Amazon Reviews Analysis</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Custom CSS -->
+    <style>
+        .dashboard-card {
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+        }
+        .sentiment-positive { color: #28a745; }
+        .sentiment-negative { color: #dc3545; }
+        .sentiment-neutral { color: #ffc107; }
+        .loading-spinner {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: #6c757d;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+    </style>
 </head>
-<body class="bg-gray-50">
-    <!-- Loading Overlay -->
-    <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
-        <div class="bg-white p-4 rounded-lg shadow-lg">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-            <p class="mt-2 text-gray-600">Loading...</p>
+<body class="bg-light">
+    <!-- Loading Spinner -->
+    <div class="loading-spinner">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
         </div>
     </div>
 
-    <!-- Navigation Bar -->
-    <nav class="bg-blue-600 text-white p-4 shadow-lg">
-        <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-2xl font-bold"> Real Time Amazon Reviews Analysis</h1>
-            <div class="flex items-center space-x-4">
-                <button onclick="exportData()" class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded">
-                    <i class="fas fa-download mr-2"></i>Export
-                </button>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-chart-line me-2"></i>
+                Real Time Amazon Reviews Analysis
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/offline-dashboard">
+                            <i class="fas fa-database me-1"></i> Offline Dashboard
+                        </a>
+                    </li>
+                </ul>
             </div>
         </div>
     </nav>
 
-    <div class="container mx-auto p-6">
-        <!-- Search Bar -->
-        {# Removed Search Bar #}
-        
-        <!-- Charts Section -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <!-- Pie Chart -->
-            <div class="bg-white p-4 rounded-lg shadow">
-                <canvas id="sentimentChart" data-values="{{ positive }},{{ negative }},{{ neutral }}"></canvas>
-            </div>
-            <!-- Product Review Distribution Chart -->
-            <div class="bg-white p-4 rounded-lg shadow">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-semibold">Total Reviews per Product (ASIN)</h3>
+    <!-- Main Content -->
+    <div class="container-fluid py-4">
+        <!-- Summary Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card dashboard-card bg-white">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 text-muted">Total Reviews</h6>
+                        <h2 class="card-title mb-0 text-primary" id="totalReviews">0</h2>
+                    </div>
                 </div>
-                <div style="height: 500px; width: 100%;">
-                    <canvas id="productReviewsChart" style="display: block; height: 100%; width: 100%;"></canvas>
+            </div>
+            <div class="col-md-3">
+                <div class="card dashboard-card bg-white">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 text-muted">Positive Reviews</h6>
+                        <h2 class="card-title mb-0 sentiment-positive" id="positiveReviews">0</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card dashboard-card bg-white">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 text-muted">Neutral Reviews</h6>
+                        <h2 class="card-title mb-0 sentiment-neutral" id="neutralReviews">0</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card dashboard-card bg-white">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 text-muted">Negative Reviews</h6>
+                        <h2 class="card-title mb-0 sentiment-negative" id="negativeReviews">0</h2>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- ASIN Review Counts -->
-        <div class="bg-white p-6 rounded-lg shadow mt-6">
-            <h3 class="text-xl font-semibold mb-4">Most Popular Products</h3>
-            <div id="asinCountsList" class="space-y-2"></div>
+        <!-- Charts Row -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card dashboard-card">
+                    <div class="card-body">
+                        <h5 class="card-title">Sentiment Distribution</h5>
+                        <div class="chart-container">
+                            <canvas id="sentimentChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card dashboard-card">
+                    <div class="card-body">
+                        <h5 class="card-title">Reviews per Product</h5>
+                        <div class="chart-container">
+                            <canvas id="productChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Reviews Table -->
-        <div class="bg-white rounded-lg shadow overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="min-w-full">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('reviewerID')">
-                                Reviewer ID <i class="fas fa-sort"></i>
-                            </th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('asin')">
-                                ASIN <i class="fas fa-sort"></i>
-                            </th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('reviewText')">
-                                Review <i class="fas fa-sort"></i>
-                            </th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('predicted_sentiment')">
-                                Predicted Sentiment <i class="fas fa-sort"></i>
-                            </th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('polarity')">
-                                Polarity <i class="fas fa-sort"></i>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        {% for review in reviews %}
-                        <tr class="hover:bg-gray-50 cursor-pointer" onclick="showReviewDetails({{ review|tojson | safe }})">
-                            <td class="px-6 py-4 whitespace-nowrap">{{ review.reviewerID }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap">{{ review.asin }}</td>
-                            <td class="px-6 py-4">
-                                <div class="max-w-md truncate">{{ review.reviewText }}</div>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="px-2 py-1 rounded-full text-sm
-                                    {% if review.predicted_sentiment == 'positive' %}
-                                        bg-green-100 text-green-800
-                                    {% elif review.predicted_sentiment == 'negative' %}
-                                        bg-red-100 text-red-800
-                                    {% else %}
-                                        bg-yellow-100 text-yellow-800
-                                    {% endif %}">
-                                    {{ review.predicted_sentiment }}
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="px-2 py-1 rounded-full text-sm
-                                    {% if review.polarity is defined and review.polarity > 0 %}
-                                        bg-green-100 text-green-800
-                                    {% elif review.polarity is defined and review.polarity < 0 %}
-                                        bg-red-100 text-red-800
-                                    {% else %}
-                                        bg-yellow-100 text-yellow-800
-                                    {% endif %}">
-                                    {{ "%.2f"|format(review.polarity) if review.polarity is defined else 'N/A' }}
-                                </span>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            
-            <!-- Pagination Controls -->
-            <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-                <div class="flex-1 flex justify-between sm:hidden">
-                    <a href="?page={{ current_page - 1 if current_page > 1 else 1 }}" 
-                       class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 {% if current_page == 1 %}opacity-50 cursor-not-allowed{% endif %}">
-                        Previous
-                    </a>
-                    <a href="?page={{ current_page + 1 if current_page < total_pages else total_pages }}" 
-                       class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 {% if current_page == total_pages %}opacity-50 cursor-not-allowed{% endif %}">
-                        Next
-                    </a>
-                </div>
-                <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                    <div>
-                        <p class="text-sm text-gray-700">
-                            Showing page <span class="font-medium">{{ current_page }}</span> of 
-                            <span class="font-medium">{{ total_pages }}</span> pages
-                        </p>
-                    </div>
-                    <div>
-                        <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                            <a href="?page={{ current_page - 1 if current_page > 1 else 1 }}" 
-                               class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 {% if current_page == 1 %}opacity-50 cursor-not-allowed{% endif %}">
-                                <span class="sr-only">Previous</span>
-                                <i class="fas fa-chevron-left"></i>
-                            </a>
-                            
-                            {% for p in page_range %}
-                            <a href="?page={{ p }}" 
-                               class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium {% if p == current_page %}text-blue-600 bg-blue-50{% else %}text-gray-700 hover:bg-gray-50{% endif %}">
-                                {{ p }}
-                            </a>
-                            {% endfor %}
-                            
-                            <a href="?page={{ current_page + 1 if current_page < total_pages else total_pages }}" 
-                               class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 {% if current_page == total_pages %}opacity-50 cursor-not-allowed{% endif %}">
-                                <span class="sr-only">Next</span>
-                                <i class="fas fa-chevron-right"></i>
-                            </a>
-                        </nav>
+        <div class="row">
+            <div class="col-12">
+                <div class="card dashboard-card">
+                    <div class="card-body">
+                        <h5 class="card-title">Recent Reviews</h5>
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Product ID (ASIN)</th>
+                                        <th>Reviewer ID</th>
+                                        <th>Review Text</th>
+                                        <th>Sentiment</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="reviewsTableBody">
+                                    <!-- Reviews will be populated here -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Review Details Modal -->
-    <div id="reviewModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
-        <div class="bg-white p-6 rounded-lg shadow-lg max-w-2xl w-full mx-4">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold">Review Details</h3>
-                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div id="modalContent" class="space-y-4">
-                <!-- Content will be dynamically inserted here -->
-            </div>
-        </div>
-    </div>
-
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Store reviews data globally for modal
-        let reviewsData = [];
-
-        // Ensure Chart.js uses the date-fns adapter
-        if (typeof Chart !== 'undefined' && typeof ChartAdapterDateFns !== 'undefined') {
-            Chart.register(ChartAdapterDateFns);
-        }
-    
-        // Function to update scatter plot (now product reviews chart)
-        function updateProductReviewsChart(data) {
-            // Update chart data
-            productReviewsChart.data.labels = data.map(item => item.asin);
-            productReviewsChart.data.datasets[0].data = data.map(item => item.total_reviews);
-            productReviewsChart.update();
-        }
-    
-        // Fetch initial data for product reviews chart
-        fetch('/product_sentiment_distribution')
-            .then(response => response.json())
-            .then(data => {
-                updateProductReviewsChart(data);
-            })
-            .catch(error => {
-                console.error('Error fetching product sentiment distribution data:', error);
-            });
-    
-        // Periodically fetch new data for product reviews chart
-        setInterval(() => {
-            fetch('/product_sentiment_distribution')
-                .then(response => response.json())
-                .then(data => {
-                    updateProductReviewsChart(data);
-                })
-                .catch(error => {
-                    console.error('Error fetching product sentiment distribution data:', error);
-                });
-        }, 10000); // Fetch every 10 seconds
-    
-        // Initialize Charts
-        const ctx = document.getElementById('sentimentChart').getContext('2d');
-        const values = document.getElementById('sentimentChart').dataset.values.split(',').map(Number);
-        
-        new Chart(ctx, {
+        // Initialize the sentiment chart
+        const sentimentCtx = document.getElementById('sentimentChart').getContext('2d');
+        let sentimentChart = new Chart(sentimentCtx, {
             type: 'pie',
             data: {
-                labels: ['Positive', 'Negative', 'Neutral'],
+                labels: ['Positive', 'Neutral', 'Negative'],
                 datasets: [{
-                    data: values,
-                    backgroundColor: ['#10B981', '#EF4444', '#F59E0B']
+                    data: [0, 0, 0],
+                    backgroundColor: [
+                        '#28a745',  // Positive - green
+                        '#ffc107',  // Neutral - yellow
+                        '#dc3545'   // Negative - red
+                    ],
+                    borderWidth: 1
                 }]
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
-                    title: {
-                        display: true,
-                        text: 'Sentiment Distribution',
-                        font: {
-                            size: 16
-                        }
-                    },
                     legend: {
                         position: 'bottom'
+                    },
+                    title: {
+                        display: true,
+                        text: 'Review Sentiment Distribution'
                     }
                 }
             }
         });
-    
-        // Product Review Distribution Chart
-        const productReviewsCtx = document.getElementById('productReviewsChart').getContext('2d');
-        const productReviewsChart = new Chart(productReviewsCtx, {
+
+        // Initialize the product reviews chart
+        const productCtx = document.getElementById('productChart').getContext('2d');
+        let productChart = new Chart(productCtx, {
             type: 'bar',
             data: {
-                labels: [], // Will be populated with ASINs
-                datasets: [
-                    {
-                        label: 'Total Reviews',
-                        data: [],
-                        backgroundColor: '#4299E1', // A single color for total reviews
-                    }
-                ]
+                labels: [],
+                datasets: [{
+                    label: 'Number of Reviews',
+                    data: [],
+                    backgroundColor: '#0d6efd',
+                    borderWidth: 1
+                }]
             },
             options: {
-                responsive: false,
+                responsive: true,
                 maintainAspectRatio: false,
-                scales: {
-                    x: {
-                        title: {
-                            display: true,
-                            text: 'Product (ASIN)'
-                        }
+                plugins: {
+                    legend: {
+                        display: false
                     },
+                    title: {
+                        display: true,
+                        text: 'Reviews per Product'
+                    }
+                },
+                scales: {
                     y: {
                         beginAtZero: true,
                         title: {
                             display: true,
                             text: 'Number of Reviews'
                         }
-                    }
-                },
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Total Reviews per Product (ASIN)',
-                        font: {
-                            size: 16
-                        }
                     },
-                    legend: {
-                         display: false // Legend not needed for a single dataset
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const label = context.dataset.label || '';
-                                const value = context.raw || 0;
-                                return `${label}: ${value}`;
-                            }
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Product ID (ASIN)'
                         }
                     }
                 }
             }
         });
-    
-        // Function to render ASIN review counts
-        function renderAsinCounts(counts) {
-            const asinCountsList = document.getElementById('asinCountsList');
-            asinCountsList.innerHTML = ''; // Clear previous list
-            
-            if (counts.length === 0) {
-                asinCountsList.innerHTML = '<p>No ASIN review counts available.</p>';
-                return;
-            }
-    
-            counts.forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'flex justify-between border-b pb-1';
-                div.innerHTML = `
-                    <span class="font-medium">${item.asin}</span>
-                    <span>${item.count} reviews</span>
-                `;
-                asinCountsList.appendChild(div);
-            });
-        }
-    
-        // Fetch initial ASIN review counts
-        fetch('/asin_review_counts')
-            .then(response => response.json())
-            .then(data => {
-                renderAsinCounts(data);
-            })
-            .catch(error => {
-                console.error('Error fetching initial ASIN review counts:', error);
-            });
-    
-        // Loading State Functions
-        function showLoading() {
-            document.getElementById('loadingOverlay').classList.remove('hidden');
-        }
-    
-        function hideLoading() {
-            document.getElementById('loadingOverlay').classList.add('hidden');
-        }
-    
-        // Search Function (Removed)
-    
-        // Pagination Function (Simplified)
-        // The main page pagination now uses simple links, changePage is still used by search results if implemented elsewhere
-    
-        // Table Update Function (This function is still used by search results if implemented elsewhere)
-        function updateTable(reviews) {
-             const tbody = document.querySelector('tbody');
-            tbody.innerHTML = reviews.map(review => `
-                <tr class="hover:bg-gray-50 cursor-pointer" onclick="showReviewDetails('${review._id}')">
-                    <td class="px-6 py-4 whitespace-nowrap">${review.reviewerID}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${review.asin}</td>
-                    <td class="px-6 py-4">
-                        <div class="max-w-md truncate">${review.reviewText || ''}</div>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <span class="px-2 py-1 rounded-full text-sm
-                            ${review.predicted_sentiment === 'positive' ? 'bg-green-100 text-green-800' :
-                              review.predicted_sentiment === 'negative' ? 'bg-red-100 text-red-800' :
-                              'bg-yellow-100 text-yellow-800'}">
-                            ${review.predicted_sentiment || 'N/A'}
-                        </span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <span class="px-2 py-1 rounded-full text-sm
-                            ${(review.polarity !== undefined && review.polarity > 0) ? 'bg-green-100 text-green-800' :
-                              (review.polarity !== undefined && review.polarity < 0) ? 'bg-red-100 text-red-800' :
-                              'bg-yellow-100 text-yellow-800'}">
-                            ${review.polarity !== undefined ? review.polarity.toFixed(2) : 'N/A'}
-                        </span>
-                    </td>
-                </tr>
-            `).join('');
-        }
-    
-        // Modal Functions
-        function showReviewDetails(reviewId) {
-            const modal = document.getElementById('reviewModal');
-            const content = document.getElementById('modalContent');
-            
-            // Find the review in the current page's data
-            const review = reviewsData.find(r => r._id === reviewId);
 
-            if (review) {
-                content.innerHTML = `
-                    <div class="space-y-4">
-                        <div>
-                            <h4 class="font-semibold">Reviewer ID</h4>
-                            <p class="mt-1">${review.reviewerID || 'N/A'}</p>
-                        </div>
-                        <div>
-                            <h4 class="font-semibold">ASIN</h4>
-                            <p class="mt-1">${review.asin || 'N/A'}</p>
-                        </div>
-                        <div>
-                            <h4 class="font-semibold">Review Text</h4>
-                            <p class="mt-1">${review.reviewText || 'N/A'}</p>
-                        </div>
-                        <div>
-                            <h4 class="font-semibold">Sentiment</h4>
-                            <p class="mt-1">
-                                <span class="px-2 py-1 rounded-full text-sm
-                                    ${review.predicted_sentiment === 'positive' ? 'bg-green-100 text-green-800' :
-                                      review.predicted_sentiment === 'negative' ? 'bg-red-100 text-red-800' :
-                                      'bg-yellow-100 text-yellow-800'}">
-                                    ${review.predicted_sentiment || 'N/A'}
-                                </span>
-                            </p>
-                        </div>
-                        <div>
-                            <h4 class="font-semibold">Polarity</h4>
-                            <p class="mt-1">
-                                <span class="px-2 py-1 rounded-full text-sm
-                                    ${(review.polarity !== undefined && review.polarity > 0) ? 'bg-green-100 text-green-800' :
-                                      (review.polarity !== undefined && review.polarity < 0) ? 'bg-red-100 text-red-800' :
-                                      'bg-yellow-100 text-yellow-800'}">
-                                    ${review.polarity !== undefined ? review.polarity.toFixed(2) : 'N/A'}
-                                </span>
-                            </p>
-                        </div>
-                        <div>
-                            <h4 class="font-semibold">Timestamp</h4>
-                            <p class="mt-1">${review.timestamp ? new Date(review.timestamp).toLocaleString() : 'N/A'}</p>
-                        </div>
-                    </div>
-                `;
-                
-                modal.classList.remove('hidden');
-            }
-        }
-    
-        function closeModal() {
-            document.getElementById('reviewModal').classList.add('hidden');
-        }
-    
-        // Export Function
-        function exportData() {
-            showLoading();
-            fetch('/export')
-                .then(response => response.json())
-                .then(data => {
-                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'reviews_export.json';
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
-                    hideLoading();
+        // Function to update dashboard data
+        function updateDashboard() {
+            console.log('Updating dashboard...');
+            // Show loading spinner
+            document.querySelector('.loading-spinner').style.display = 'block';
+            
+            fetch('/recent_reviews')
+                .then(response => {
+                    console.log('Reviews response status:', response.status);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
                 })
-                .catch(error => {
-                    console.error('Error:', error);
-                    hideLoading();
-                });
-        }
-    
-        // Sort Function
-        function sortTable(column) {
-            const tbody = document.querySelector('tbody');
-            const rows = Array.from(tbody.querySelectorAll('tr'));
-            
-            rows.sort((a, b) => {
-                const aValue = a.querySelector(`td:nth-child(${getColumnIndex(column)})`).textContent;
-                const bValue = b.querySelector(`td:nth-child(${getColumnIndex(column)})`).textContent;
-                return aValue.localeCompare(bValue);
-            });
-            
-            tbody.innerHTML = '';
-            rows.forEach(row => tbody.appendChild(row));
-        }
-    
-        function getColumnIndex(column) {
-            switch(column) {
-                case 'reviewerID': return 1;
-                case 'asin': return 2;
-                case 'reviewText': return 3;
-                case 'predicted_sentiment': return 4;
-                case 'polarity': return 5;
-                default: return 1;
-            }
-        }
+                .then(data => {
+                    console.log('Received data:', data);
+                    
+                    // Update sentiment counts from the response
+                    const counts = data.sentiment_counts;
+                    console.log('Received sentiment counts:', counts);
+                    
+                    // Update total reviews count
+                    document.getElementById('totalReviews').textContent = counts.total;
+                    
+                    // Update sentiment counts
+                    document.getElementById('positiveReviews').textContent = counts.positive;
+                    document.getElementById('neutralReviews').textContent = counts.neutral;
+                    document.getElementById('negativeReviews').textContent = counts.negative;
 
-        // Pagination Function (Removed)
-        // function changePage(page) {
-        //     // ... logic ...
-        // }
+                    // Update the pie chart
+                    sentimentChart.data.datasets[0].data = [
+                        counts.positive,
+                        counts.neutral,
+                        counts.negative
+                    ];
+                    sentimentChart.update();
 
-        // Add function to handle page changes
-        function changePage(page) {
-            const url = new URL(window.location.href);
-            url.searchParams.set('page', page);
-            window.location.href = url.toString();
-        }
+                    // Update the product reviews chart
+                    if (data.product_counts) {
+                        const labels = data.product_counts.map(item => item.asin);
+                        const values = data.product_counts.map(item => item.count);
+                        
+                        productChart.data.labels = labels;
+                        productChart.data.datasets[0].data = values;
+                        productChart.update();
+                    }
 
-        // This part initializes the table with data from the backend on page load
-        document.addEventListener('DOMContentLoaded', () => {
-            fetch(window.location.href) // Fetch data for the current page (includes pagination)
-                .then(response => response.text())
-                .then(html => {
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(html, 'text/html');
-                    const newTbody = doc.querySelector('tbody');
-                    const oldTbody = document.querySelector('tbody');
-                    if (newTbody && oldTbody) {
-                        oldTbody.innerHTML = newTbody.innerHTML;
-                         // Store the reviews data from the rendered HTML
-                        // This is a bit of a hack - ideally the backend would expose this data via a JSON endpoint
-                        // But for now, we can extract it from the rendered HTML structure
-                        const scriptTags = doc.querySelectorAll('script');
-                        let reviewsScriptContent = null;
-                        scriptTags.forEach(script => {
-                            if (script.textContent.includes('let reviewsData =')) {
-                                reviewsScriptContent = script.textContent;
-                            }
-                        });
-
-                        if (reviewsScriptContent) {
-                            // Extract the JSON array from the script content
-                            const jsonMatch = reviewsScriptContent.match(/let reviewsData = (.*?);/s);
-                            if (jsonMatch && jsonMatch[1]) {
-                                try {
-                                    // Need to be careful here - the data might not be valid JSON
-                                    // However, given how it's constructed in the backend, it should be close
-                                    reviewsData = JSON.parse(jsonMatch[1]);
-                                } catch (e) {
-                                    console.error('Error parsing reviews data from script tag:', e);
-                                    // Fallback: Maybe try to extract from data attributes if that was implemented
-                                    // Or signal that modal won't work for this page load
-                                }
-                            }
+                    // Update table with the new review
+                    const reviews = data.reviews;
+                    console.log('Number of reviews received:', reviews.length);
+                    
+                    if (reviews.length === 0) {
+                        console.log('No reviews received from server');
+                        document.getElementById('reviewsTableBody').innerHTML = `
+                            <tr>
+                                <td colspan="4" class="empty-state">
+                                    <i class="fas fa-inbox fa-3x mb-3"></i>
+                                    <p>No reviews found</p>
+                                </td>
+                            </tr>
+                        `;
+                    } else {
+                        console.log('Adding new review to table');
+                        const review = reviews[0];  // Get the single review
+                        const newRow = `
+                            <tr class="new-review">
+                                <td>${review.asin || 'N/A'}</td>
+                                <td>${review.reviewerID || 'N/A'}</td>
+                                <td>${review.reviewText ? review.reviewText.substring(0, 100) + '...' : 'N/A'}</td>
+                                <td>
+                                    <span class="badge bg-${review.predicted_sentiment === 'positive' ? 'success' : 
+                                        review.predicted_sentiment === 'negative' ? 'danger' : 'warning'}">
+                                        ${review.predicted_sentiment || 'neutral'}
+                                    </span>
+                                </td>
+                            </tr>
+                        `;
+                        
+                        // Add the new review at the top of the table
+                        const tbody = document.getElementById('reviewsTableBody');
+                        tbody.insertAdjacentHTML('afterbegin', newRow);
+                        
+                        // Keep only the last 10 reviews
+                        const rows = tbody.getElementsByTagName('tr');
+                        while (rows.length > 10) {
+                            tbody.removeChild(rows[rows.length - 1]);
                         }
+                        
+                        // Add highlight animation
+                        const newRowElement = tbody.firstElementChild;
+                        newRowElement.style.animation = 'highlight 2s';
                     }
                 })
                 .catch(error => {
-                    console.error('Error fetching initial table data:', error);
+                    console.error('Error fetching reviews:', error);
+                    document.getElementById('reviewsTableBody').innerHTML = `
+                        <tr>
+                            <td colspan="4" class="text-center text-danger">
+                                <i class="fas fa-exclamation-circle me-2"></i>
+                                Error loading reviews: ${error.message}
+                            </td>
+                        </tr>
+                    `;
+                })
+                .finally(() => {
+                    // Hide loading spinner
+                    document.querySelector('.loading-spinner').style.display = 'none';
                 });
-        });
+        }
+
+        // Add highlight animation style
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes highlight {
+                0% { background-color: #fff3cd; }
+                100% { background-color: transparent; }
+            }
+            .new-review {
+                animation: highlight 2s;
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Initialize dashboard
+        updateDashboard();
+
+        // Auto-refresh every 2 seconds
+        setInterval(updateDashboard, 2000);
     </script>
 </body>
 </html>

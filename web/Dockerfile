@@ -8,8 +8,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY web/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
 
-CMD ["python", "app.py"]
+COPY web/ .
+
+EXPOSE 5000
+
+CMD ["flask", "run", "--host=0.0.0.0"]

@@ -126,13 +126,19 @@ def predict_sentiment(text):
         logger.error(f"Error predicting sentiment: {str(e)}")
         return "unknown", None
 
-
-
-
-
 def save_to_mongo():
     consumer = create_consumer()
     logger.info("MongoDB consumer started...")
+    
+    # Initialize or load existing predicted data
+    predicted_data_file = "/app/data/predicted_data.json"
+    try:
+        with open(predicted_data_file, 'r') as f:
+            predicted_data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        predicted_data = []
+        logger.info("Starting with empty predicted data file")
+    
     for message in consumer:
         try:
             data = message.value
@@ -144,7 +150,6 @@ def save_to_mongo():
             logger.info(f"Inserted raw data with ID: {doc_id}")
             
             # Add preprocessed fields
-            print("testetstetetdet")
             data['predicted_sentiment'], polarity = predict_sentiment(data['reviewText'])
             data['polarity'] = polarity if polarity is not None else 0.0
             
@@ -154,9 +159,32 @@ def save_to_mongo():
                 'polarity': data['polarity']
             }})
             logger.info(f"Updated document with ID: {doc_id} - polarity={data['polarity']}, predicted_sentiment={data['predicted_sentiment']}")
+            
+            # Add to predicted data list
+            predicted_data.append({
+                'reviewerID': data.get('reviewerID', 'N/A'),
+                'asin': data.get('asin', 'N/A'),
+                'reviewText': data.get('reviewText', ''),
+                'predicted_sentiment': data['predicted_sentiment'],
+                'polarity': data['polarity']
+            })
+            
+            # Save to file every 10 reviews to avoid too frequent writes
+            if len(predicted_data) % 10 == 0:
+                with open(predicted_data_file, 'w') as f:
+                    json.dump(predicted_data, f, indent=2)
+                logger.info(f"Saved {len(predicted_data)} reviews to predicted_data.json")
+                
         except Exception as e:
             logger.error(f"Failed to save or update: {str(e)}")
             
+    # Save any remaining reviews at the end
+    try:
+        with open(predicted_data_file, 'w') as f:
+            json.dump(predicted_data, f, indent=2)
+        logger.info(f"Final save: {len(predicted_data)} reviews saved to predicted_data.json")
+    except Exception as e:
+        logger.error(f"Failed to save final predicted data: {str(e)}")
 
 if __name__ == "__main__":
     try:
