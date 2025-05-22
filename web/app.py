@@ -2,8 +2,6 @@ from flask import Flask, render_template, request, jsonify
 from pymongo import MongoClient
 import logging
 import sys
-import os
-import json
 from datetime import datetime, timezone, timedelta
 
 # Set up logging with more detailed format
@@ -25,14 +23,6 @@ collection = db.reviews
 # Global variable to track the last review index
 last_review_index = 0
 
-def load_predicted_data():
-    try:
-        with open('/app/data/predicted_data.json', 'r') as f:
-            return json.load(f)
-    except Exception as e:
-        logger.error(f"Error loading predicted data: {e}")
-        return []
-
 @app.route('/')
 def index():
     # For the main page, we'll just render the template
@@ -41,8 +31,8 @@ def index():
 
 @app.route('/offline-dashboard')
 def offline_dashboard():
-    # Load data from JSON file
-    reviews = load_predicted_data()
+    # Get data from MongoDB
+    reviews = list(collection.find())
     
     # Calculate sentiment distribution
     positive = sum(1 for r in reviews if r.get('predicted_sentiment') == 'positive')
@@ -58,6 +48,10 @@ def offline_dashboard():
     
     # Get current page reviews
     current_reviews = reviews[start_idx:end_idx]
+    
+    # Convert ObjectId to string for JSON serialization
+    for review in current_reviews:
+        review['_id'] = str(review['_id'])
     
     # Calculate page range for pagination
     page_range = list(range(max(1, page - 2), min(total_pages + 1, page + 3)))
@@ -156,7 +150,7 @@ def product_sentiment_distribution():
             }
         },
         {
-            '$sort': {'total_reviews': -1} # Sort by total reviews descending
+            '$sort': {'total_reviews': -1}  # Sort by total reviews descending
         }
     ]
     
@@ -168,8 +162,8 @@ def product_sentiment_distribution():
 def recent_reviews():
     global last_review_index
     try:
-        # Load the latest data
-        reviews = load_predicted_data()
+        # Get all reviews from MongoDB
+        reviews = list(collection.find())
         
         if not reviews:
             return jsonify({
@@ -207,6 +201,9 @@ def recent_reviews():
                 reverse=True
             )[:10]
         ]
+        
+        # Convert ObjectId to string for JSON serialization
+        current_review['_id'] = str(current_review['_id'])
         
         return jsonify({
             'reviews': [current_review],  # Return only one review
@@ -257,9 +254,12 @@ def export():
         processed_review = review.copy()
         processed_review['_id'] = str(review['_id'])
         if 'timestamp' in review and isinstance(review['timestamp'], datetime):
-             processed_review['timestamp'] = review['timestamp'].isoformat()
+            processed_review['timestamp'] = review['timestamp'].isoformat()
         elif 'unixReviewTime' in review and isinstance(review['unixReviewTime'], (int, float)):
-             processed_review['timestamp'] = datetime.fromtimestamp(review['unixReviewTime'], tz=timezone.utc).isoformat()
+            processed_review['timestamp'] = datetime.fromtimestamp(
+                review['unixReviewTime'], 
+                tz=timezone.utc
+            ).isoformat()
         processed_reviews.append(processed_review)
 
     return jsonify(processed_reviews)
