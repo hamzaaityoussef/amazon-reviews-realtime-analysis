@@ -60,21 +60,29 @@
             <div class="bg-white p-4 rounded-lg shadow">
                 <canvas id="sentimentChart" data-values="{{ positive }},{{ negative }},{{ neutral }}"></canvas>
             </div>
-            <!-- Product Review Distribution Chart -->
-            <div class="bg-white p-4 rounded-lg shadow">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-semibold">Total Reviews per Product (ASIN)</h3>
-                </div>
-                <div style="height: 500px; width: 100%;">
-                    <canvas id="productReviewsChart" style="display: block; height: 100%; width: 100%;"></canvas>
+            <!-- Product Reviews Chart -->
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">Top 3 Products Analysis</h2>
+                <div class="h-96">
+                    <canvas id="productReviewsChart"></canvas>
                 </div>
             </div>
         </div>
 
-        <!-- ASIN Review Counts -->
+        <!-- Top Products Details -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Product Sentiment Details</h2>
+            <div id="topProductsDetails" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Most Popular Products -->
         <div class="bg-white p-6 rounded-lg shadow mt-6">
             <h3 class="text-xl font-semibold mb-4">Most Popular Products</h3>
-            <div id="asinCountsList" class="space-y-2"></div>
+            <div id="asinCountsList" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Will be populated by JavaScript -->
+            </div>
         </div>
 
         <!-- Reviews Table -->
@@ -210,12 +218,64 @@
             Chart.register(ChartAdapterDateFns);
         }
     
-        // Function to update scatter plot (now product reviews chart)
+        // Function to update product reviews chart
         function updateProductReviewsChart(data) {
-            // Update chart data
+            if (!data || data.length === 0) {
+                console.error('No data received for product reviews chart');
+                return;
+            }
+            
             productReviewsChart.data.labels = data.map(item => item.asin);
             productReviewsChart.data.datasets[0].data = data.map(item => item.total_reviews);
             productReviewsChart.update();
+        }
+    
+        // Function to update top products details
+        function updateTopProductsDetails(data) {
+            if (!data || data.length === 0) {
+                console.error('No data received for top products details');
+                return;
+            }
+
+            const container = document.getElementById('topProductsDetails');
+            container.innerHTML = ''; // Clear previous content
+
+            data.forEach(product => {
+                const positivePercentage = ((product.positive / product.total_reviews) * 100).toFixed(1);
+                const neutralPercentage = ((product.neutral / product.total_reviews) * 100).toFixed(1);
+                const negativePercentage = ((product.negative / product.total_reviews) * 100).toFixed(1);
+
+                const card = document.createElement('div');
+                card.className = 'bg-gray-50 rounded-lg p-4 hover:shadow-lg transition-shadow';
+                card.innerHTML = `
+                    <h3 class="font-semibold mb-2 text-lg">Product: ${product.asin}</h3>
+                    <div class="space-y-3">
+                        <p class="text-gray-600">Total Reviews: ${product.total_reviews}</p>
+                        <div class="space-y-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-green-600 font-medium">Positive</span>
+                                <span class="text-gray-600">${product.positive} (${positivePercentage}%)</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-yellow-600 font-medium">Neutral</span>
+                                <span class="text-gray-600">${product.neutral} (${neutralPercentage}%)</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-red-600 font-medium">Negative</span>
+                                <span class="text-gray-600">${product.negative} (${negativePercentage}%)</span>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                <div class="h-full bg-green-500" style="width: ${positivePercentage}%"></div>
+                                <div class="h-full bg-yellow-500" style="width: ${neutralPercentage}%"></div>
+                                <div class="h-full bg-red-500" style="width: ${negativePercentage}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
         }
     
         // Initialize Charts
@@ -248,57 +308,55 @@
             }
         });
     
-        // Product Review Distribution Chart
+        // Product Reviews Chart
         const productReviewsCtx = document.getElementById('productReviewsChart').getContext('2d');
         const productReviewsChart = new Chart(productReviewsCtx, {
             type: 'bar',
             data: {
-                labels: [], // Will be populated with ASINs
-                datasets: [
-                    {
-                        label: 'Total Reviews',
-                        data: [],
-                        backgroundColor: '#4299E1', // A single color for total reviews
-                    }
-                ]
+                labels: [],
+                datasets: [{
+                    label: 'Total Reviews',
+                    data: [],
+                    backgroundColor: '#4299E1',
+                    borderColor: '#2B6CB0',
+                    borderWidth: 1
+                }]
             },
             options: {
-                responsive: false,
+                responsive: true,
                 maintainAspectRatio: false,
                 scales: {
                     x: {
                         title: {
                             display: true,
-                            text: 'Product (ASIN)'
+                            text: 'Product (ASIN)',
+                            font: {
+                                weight: 'bold'
+                            }
                         }
                     },
                     y: {
                         beginAtZero: true,
                         title: {
                             display: true,
-                            text: 'Number of Reviews'
+                            text: 'Number of Reviews',
+                            font: {
+                                weight: 'bold'
+                            }
                         }
                     }
                 },
                 plugins: {
                     title: {
                         display: true,
-                        text: 'Total Reviews per Product (ASIN)',
+                        text: 'Top 3 Products by Review Count',
                         font: {
-                            size: 16
+                            size: 16,
+                            weight: 'bold'
                         }
                     },
                     legend: {
-                         display: false // Legend not needed for a single dataset
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const label = context.dataset.label || '';
-                                const value = context.raw || 0;
-                                return `${label}: ${value}`;
-                            }
-                        }
+                        display: false
                     }
                 }
             }
@@ -309,17 +367,24 @@
             const asinCountsList = document.getElementById('asinCountsList');
             asinCountsList.innerHTML = ''; // Clear previous list
             
-            if (counts.length === 0) {
-                asinCountsList.innerHTML = '<p>No ASIN review counts available.</p>';
+            if (!counts || counts.length === 0) {
+                asinCountsList.innerHTML = '<p class="text-gray-500">No product data available.</p>';
                 return;
             }
-    
-            counts.forEach(item => {
+
+            counts.forEach((item, index) => {
                 const div = document.createElement('div');
-                div.className = 'flex justify-between border-b pb-1';
+                div.className = 'bg-gray-50 rounded-lg p-4 hover:shadow-lg transition-shadow';
                 div.innerHTML = `
-                    <span class="font-medium">${item.asin}</span>
-                    <span>${item.count} reviews</span>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-lg font-semibold text-gray-800">#${index + 1}</span>
+                        <span class="text-sm text-gray-500">Product ID</span>
+                    </div>
+                    <div class="text-xl font-bold text-blue-600 mb-2">${item.asin}</div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-600">Total Reviews</span>
+                        <span class="text-lg font-semibold text-gray-800">${item.count}</span>
+                    </div>
                 `;
                 asinCountsList.appendChild(div);
             });
@@ -446,6 +511,16 @@
                     console.error('Error fetching product sentiment distribution:', error);
                 });
 
+            // Fetch top products details
+            fetch('/top_products_details')
+                .then(response => response.json())
+                .then(data => {
+                    updateTopProductsDetails(data);
+                })
+                .catch(error => {
+                    console.error('Error fetching top products details:', error);
+                });
+
             // Fetch ASIN review counts
             fetch('/asin_review_counts')
                 .then(response => response.json())
@@ -454,6 +529,8 @@
                 })
                 .catch(error => {
                     console.error('Error fetching ASIN review counts:', error);
+                    const asinCountsList = document.getElementById('asinCountsList');
+                    asinCountsList.innerHTML = '<p class="text-red-500">Error loading product data.</p>';
                 });
         });
     </script>

@@ -1,0 +1,404 @@
+\documentclass[11pt,a4paper,twocolumn]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{geometry}
+\usepackage{titlesec}
+\usepackage{abstract}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta}
+
+% Adjust page margins
+\geometry{
+    a4paper,
+    top=2cm,
+    bottom=2cm,
+    left=1.5cm,
+    right=1.5cm
+}
+
+% Adjust spacing
+\setlength{\parskip}{0.5em}
+\setlength{\parindent}{0pt}
+
+% Configure itemize and enumerate spacing
+\setlist[itemize]{leftmargin=*,itemsep=0.2em,parsep=0.2em}
+\setlist[enumerate]{leftmargin=*,itemsep=0.2em,parsep=0.2em}
+
+% Title formatting
+\titleformat{\section}
+{\normalfont\large\bfseries}{\thesection}{1em}{}
+\titlespacing*{\section}{0pt}{10pt}{6pt}
+
+\titleformat{\subsection}
+{\normalfont\normalsize\bfseries}{\thesubsection}{1em}{}
+\titlespacing*{\subsection}{0pt}{8pt}{4pt}
+
+% Custom title page
+\title{
+    \vspace*{2cm}
+    \Huge\textbf{Real-Time Amazon Reviews Analysis System}\\[2cm]
+    \Large\textit{Project Report}\\[3cm]
+    \large
+    \begin{tabular}{c}
+        Your Name
+    \end{tabular}\\[2cm]
+    \normalsize
+    \textit{Under the supervision of}\\[0.5cm]
+    \large
+    Professor Name\\[2cm]
+    \vspace*{2cm}
+}
+
+\author{}
+\date{}
+
+\begin{document}
+
+% Title page
+\maketitle
+\thispagestyle{empty}
+\newpage
+
+% Abstract and Introduction
+\begin{abstract}
+This report presents a comprehensive analysis of a real-time Amazon reviews processing system. The system utilizes Apache Kafka for stream processing, MongoDB for data storage, and a web-based dashboard for real-time visualization. The implementation includes sentiment analysis using machine learning models, real-time data processing, and interactive data visualization. The system processes Amazon product reviews in real-time, performs sentiment analysis, and presents the results through an interactive web dashboard, enabling businesses to monitor customer feedback and identify trends effectively.
+\end{abstract}
+
+\section{Introduction}
+Amazon product reviews provide valuable insights into customer satisfaction and product performance. This project implements a real-time analysis system that processes these reviews, performs sentiment analysis, and visualizes the results through an interactive dashboard. The system leverages modern technologies including Apache Kafka for message streaming, MongoDB for data storage, and a Flask-based web application for real-time visualization. By providing both real-time and historical analysis capabilities, the system enables businesses to monitor customer feedback and make data-driven decisions.
+
+\section{Project Requirements and Architecture}
+\subsection{Project Objectives}
+The project aims to deliver a robust review analysis platform with the following requirements:
+\begin{itemize}
+    \item \textbf{Real-time Processing}: Implement Kafka-based streaming of Amazon reviews with efficient message handling and data validation.
+    \item \textbf{Sentiment Analysis}: Develop and deploy machine learning models for accurate sentiment classification of reviews.
+    \item \textbf{Data Storage}: Utilize MongoDB for efficient storage and retrieval of review data and analysis results.
+    \item \textbf{Visualization}: Create an interactive web dashboard for real-time monitoring and historical analysis.
+\end{itemize}
+
+\subsection{System Architecture}
+The system employs a microservices architecture with the following components:
+\begin{itemize}
+    \item \textbf{Kafka}: Manages real-time message streaming between components
+    \item \textbf{Consumer}: Processes messages and performs sentiment analysis
+    \item \textbf{MongoDB}: Stores processed reviews and analysis results
+    \item \textbf{Web Dashboard}: Provides real-time visualization and historical analysis
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+node distance=1.5cm and 1cm,
+mynode/.style={rectangle, rounded corners, draw, thick, minimum height=1.5em, minimum width=3em, align=center, drop shadow},
+arrow/.style={-Stealth, thick}
+]
+% Nodes
+\node[mynode, fill=blue!20] (producer) {Producer};
+\node[mynode, fill=gray!20, right=of producer] (kafka) {Kafka};
+\node[mynode, fill=orange!20, right=of kafka] (consumer) {Consumer};
+\node[mynode, fill=green!20, below=of consumer] (mongodb) {MongoDB};
+\node[mynode, fill=cyan!20, right=of consumer] (web) {Web Dashboard};
+
+% Arrows
+\draw[arrow] (producer) -- node[above] {Stream} (kafka);
+\draw[arrow] (kafka) -- node[above] {Process} (consumer);
+\draw[arrow] (consumer) -- node[right] {Store} (mongodb);
+\draw[arrow] (mongodb) -- node[above] {Visualize} (web);
+
+% Labels
+\node[below=0.2cm of producer] {Data Source};
+\node[below=0.2cm of kafka] {Message Queue};
+\node[below=0.2cm of consumer] {Processing};
+\node[below=0.2cm of mongodb] {Storage};
+\node[below=0.2cm of web] {Visualization};
+\end{tikzpicture}
+\caption{System architecture overview.}
+\label{fig:architecture}
+\end{figure}
+
+\section{Technical Implementation}
+\subsection{Data Processing Pipeline}
+The system implements the following processing steps:
+\begin{itemize}
+    \item \textbf{Data Ingestion}: Amazon reviews are streamed through Kafka topics
+    \item \textbf{Message Processing}: Consumer processes messages and performs sentiment analysis
+    \item \textbf{Data Storage}: Processed reviews are stored in MongoDB
+    \item \textbf{Visualization}: Web dashboard displays real-time and historical data
+\end{itemize}
+
+\subsection{Sentiment Analysis}
+The sentiment analysis component:
+\begin{itemize}
+    \item \textbf{Text Processing}: Cleans and normalizes review text
+    \item \textbf{Feature Extraction}: Implements TF-IDF vectorization
+    \item \textbf{Classification}: Uses logistic regression for sentiment prediction
+\end{itemize}
+
+\subsection{Machine Learning Model}
+The sentiment analysis model involves:
+\begin{itemize}
+    \item \textbf{Preprocessing}:
+    \begin{itemize}
+        \item Text cleaning removes noise, URLs, and special characters
+        \item Tokenization via spaCy extracts meaningful units
+        \item Lemmatization normalizes words to their base forms
+        \item Stop word removal eliminates common words
+        \item Custom preprocessing for review-specific patterns
+    \end{itemize}
+    
+    \item \textbf{Feature Extraction}:
+    \begin{itemize}
+        \item TF-IDF vectorization captures word importance
+        \item N-gram analysis (unigrams and bigrams) for contextual features
+        \item Polarity scores from TextBlob for sentiment indicators
+        \item Review length and word count as additional features
+        \item Feature selection based on term frequency
+    \end{itemize}
+    
+    \item \textbf{Model Training and Evaluation}:
+    \begin{itemize}
+        \item Data split: 80\% training, 10\% validation, 10\% testing
+        \item Cross-validation with 5 folds for robust evaluation
+        \item Hyperparameter tuning using grid search
+        \item Model comparison using multiple metrics:
+        \begin{itemize}
+            \item Accuracy: Overall prediction correctness
+            \item Precision: True positives among positive predictions
+            \item Recall: True positives among actual positives
+            \item F1-score: Harmonic mean of precision and recall
+        \end{itemize}
+    \end{itemize}
+    
+    \item \textbf{Model Selection}:
+    \begin{itemize}
+        \item Logistic Regression (selected model):
+        \begin{itemize}
+            \item Accuracy: 97.4\%
+            \item F1-score: 0.974
+            \item Training time: 187 seconds
+            \item Hyperparameters: maxIter=100, regParam=0.1
+        \end{itemize}
+        \item Alternative models evaluated:
+        \begin{itemize}
+            \item Naive Bayes: 91.3\% accuracy, faster training
+            \item Random Forest: 64.7\% accuracy, higher complexity
+            \item Decision Tree: 52.5\% accuracy, interpretable but less accurate
+        \end{itemize}
+    \end{itemize}
+    
+    \item \textbf{Model Deployment}:
+    \begin{itemize}
+        \item Model serialization using Spark's save/load functionality
+        \item Integration with Kafka consumer for real-time predictions
+        \item Batch processing for efficient inference
+        \item Error handling and fallback mechanisms
+    \end{itemize}
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\textwidth]{model_comparison.png}
+    \caption{Model Performance Comparison}
+    \label{fig:model_comparison}
+\end{figure}
+
+\section{Visualization and Analytics}
+\subsection{Online Dashboard}
+The Flask-based dashboard enables real-time monitoring with:
+\begin{itemize}
+    \item \textbf{Live Updates}: Displays recent reviews and sentiment distributions with $<1$ second latency, using MongoDB queries. The dashboard automatically refreshes every 2 seconds to show the latest data.
+    \item \textbf{Sentiment Distribution}: Visualizes the distribution of positive, negative, and neutral reviews using dynamic counters and charts. The sentiment analysis is performed using a pre-trained logistic regression model.
+    \item \textbf{Review Table}: Presents a real-time table of the most recent reviews, including:
+    \begin{itemize}
+        \item Product ID (ASIN)
+        \item Reviewer ID
+        \item Review text
+        \item Predicted sentiment
+        \item Timestamp
+    \end{itemize}
+    \item \textbf{Interactive Features}: 
+    \begin{itemize}
+        \item Auto-refresh functionality to maintain real-time data
+        \item Smooth transitions between updates to prevent visual disruption
+        \item Error handling for failed data fetches
+        \item Fallback to previous values during connection issues
+    \end{itemize}
+    \item \textbf{Technical Implementation}:
+    \begin{itemize}
+        \item Flask backend with RESTful API endpoints
+        \item MongoDB integration for efficient data retrieval
+        \item JavaScript-based frontend for dynamic updates
+        \item WebSocket support for real-time communication
+    \end{itemize}
+\end{itemize}
+
+The dashboard's architecture ensures efficient data flow:
+\begin{enumerate}
+    \item The Flask backend queries MongoDB for recent reviews
+    \item Data is processed and formatted for frontend consumption
+    \item The frontend JavaScript code updates the UI components
+    \item Error handling mechanisms maintain system stability
+\end{enumerate}
+
+This real-time monitoring system enables businesses to:
+\begin{itemize}
+    \item Track customer sentiment trends as they emerge
+    \item Identify potential issues with products quickly
+    \item Monitor the effectiveness of product improvements
+    \item Make data-driven decisions based on current customer feedback
+\end{itemize}
+
+\subsection{Offline Dashboard}
+The offline dashboard provides comprehensive historical analysis with the following features:
+\begin{itemize}
+    \item \textbf{Top Products Analysis}:
+    \begin{itemize}
+        \item Focus on the three most reviewed products
+        \item Detailed sentiment distribution for each product
+        \item Review volume trends over time
+        \item Comparative analysis between top products
+    \end{itemize}
+    
+    \item \textbf{Data Visualization}:
+    \begin{itemize}
+        \item Sentiment distribution charts for top 3 products
+        \item Review volume comparison
+        \item Time-series analysis of sentiment trends
+        \item Product-specific review patterns
+    \end{itemize}
+    
+    \item \textbf{Analytics Features}:
+    \begin{itemize}
+        \item Aggregate sentiment scores for top products
+        \item Review volume statistics
+        \item Sentiment trend analysis
+        \item Product performance comparison
+    \end{itemize}
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\textwidth]{offline1.png}
+    \caption{Top 3 Products Sentiment Analysis}
+    \label{fig:offline1}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\textwidth]{offline2.png}
+    \caption{Product Comparison Dashboard}
+    \label{fig:offline2}
+\end{figure}
+
+\section{Deployment and Performance}
+\subsection{Containerization and Deployment}
+The system is deployed using Docker with the following architecture:
+\begin{itemize}
+    \item \textbf{Service Isolation}:
+    \begin{itemize}
+        \item Kafka and Zookeeper containers for message streaming
+        \item MongoDB container for data storage
+        \item Producer container for data ingestion
+        \item Consumer container for sentiment analysis
+        \item Web application container for the dashboard
+    \end{itemize}
+    
+    \item \textbf{Docker Compose Configuration}:
+    \begin{itemize}
+        \item Service dependencies and startup order
+        \item Network configuration for inter-service communication
+        \item Volume mapping for persistent data storage
+        \item Environment variable management
+    \end{itemize}
+    
+    \item \textbf{Orchestration Features}:
+    \begin{itemize}
+        \item Automatic container restart on failure
+        \item Health checks for service monitoring
+        \item Resource limits and reservations
+        \item Log aggregation and monitoring
+    \end{itemize}
+\end{itemize}
+
+\subsection{Performance Analysis}
+The system's performance is evaluated across multiple dimensions:
+
+\subsubsection{Processing Performance}
+\begin{itemize}
+    \item \textbf{Real-time Processing}:
+    \begin{itemize}
+        \item Efficient message processing through Kafka consumer
+        \item Regular updates to the dashboard every 2 seconds
+        \item Batch processing of reviews for sentiment analysis
+    \end{itemize}
+    
+    \item \textbf{Data Processing Pipeline}:
+    \begin{itemize}
+        \item Reliable Kafka message delivery with retry mechanisms
+        \item Efficient MongoDB write operations with batch processing
+        \item Optimized Spark configuration for memory management
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Scalability Features}
+\begin{itemize}
+    \item \textbf{System Design}:
+    \begin{itemize}
+        \item Containerized services for easy scaling
+        \item Distributed processing with Spark
+        \item Efficient data storage with MongoDB
+    \end{itemize}
+    
+    \item \textbf{Resource Management}:
+    \begin{itemize}
+        \item Configurable memory allocation for Spark
+        \item Optimized container resource limits
+        \item Efficient batch processing for data loading
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Model Performance}
+\begin{itemize}
+    \item \textbf{Sentiment Analysis Accuracy}:
+    \begin{itemize}
+        \item Logistic Regression: 97.4\% accuracy
+        \item Naive Bayes: 91.3\% accuracy
+        \item Random Forest: 64.7\% accuracy
+        \item Decision Tree: 52.5\% accuracy
+    \end{itemize}
+    
+    \item \textbf{Model Selection}:
+    \begin{itemize}
+        \item Logistic Regression chosen for optimal performance
+        \item Efficient text processing with spaCy
+        \item TF-IDF feature extraction for improved accuracy
+    \end{itemize}
+\end{itemize}
+
+\subsection{Reliability and Monitoring}
+\begin{itemize}
+    \item \textbf{System Reliability}:
+    \begin{itemize}
+        \item Automatic retry mechanisms for service connections
+        \item Error handling and logging throughout the pipeline
+        \item Data persistence across container restarts
+    \end{itemize}
+    
+    \item \textbf{Monitoring and Logging}:
+    \begin{itemize}
+        \item Comprehensive logging of system operations
+        \item Error tracking and reporting
+        \item Service health monitoring through Docker
+    \end{itemize}
+\end{itemize}
+
+\section{Conclusion}
+This project successfully implements a real-time Amazon reviews analysis system using modern technologies. The system provides valuable insights through its interactive dashboard and maintains high performance in processing and analyzing review data. Future improvements could include enhanced machine learning models and additional analytics features.
+
+\end{document} 

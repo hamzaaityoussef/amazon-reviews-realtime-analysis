@@ -151,12 +151,86 @@ def product_sentiment_distribution():
         },
         {
             '$sort': {'total_reviews': -1}  # Sort by total reviews descending
+        },
+        {
+            '$limit': 3  # Only get top 3 products
         }
     ]
     
     product_data = list(collection.aggregate(pipeline))
     
     return jsonify(product_data)
+
+@app.route('/top_products_details')
+def top_products_details():
+    try:
+        # First get the top 3 products by review count
+        top_products_pipeline = [
+            {
+                '$group': {
+                    '_id': '$asin',
+                    'total_reviews': {'$sum': 1}
+                }
+            },
+            {
+                '$sort': {'total_reviews': -1}
+            },
+            {
+                '$limit': 3
+            }
+        ]
+        
+        top_products = list(collection.aggregate(top_products_pipeline))
+        top_asins = [p['_id'] for p in top_products]
+        
+        # Get sentiment distribution for these products
+        sentiment_pipeline = [
+            {
+                '$match': {
+                    'asin': {'$in': top_asins}
+                }
+            },
+            {
+                '$group': {
+                    '_id': {
+                        'asin': '$asin',
+                        'sentiment': '$predicted_sentiment'
+                    },
+                    'count': {'$sum': 1}
+                }
+            },
+            {
+                '$group': {
+                    '_id': '$_id.asin',
+                    'sentiments': {
+                        '$push': {
+                            'sentiment': '$_id.sentiment',
+                            'count': '$count'
+                        }
+                    },
+                    'total_reviews': {'$sum': '$count'}
+                }
+            }
+        ]
+        
+        sentiment_data = list(collection.aggregate(sentiment_pipeline))
+        
+        # Format the data
+        formatted_data = []
+        for product in sentiment_data:
+            sentiments = {s['sentiment']: s['count'] for s in product['sentiments']}
+            formatted_data.append({
+                'asin': product['_id'],
+                'total_reviews': product['total_reviews'],
+                'positive': sentiments.get('positive', 0),
+                'negative': sentiments.get('negative', 0),
+                'neutral': sentiments.get('neutral', 0)
+            })
+        
+        return jsonify(formatted_data)
+    except Exception as e:
+        logger.error(f"Error in top_products_details: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/recent_reviews')
 def recent_reviews():
@@ -221,29 +295,35 @@ def recent_reviews():
 
 @app.route('/asin_review_counts')
 def asin_review_counts():
-    # Aggregate to count reviews per ASIN
-    pipeline = [
-        {
-            '$group': {
-                '_id': '$asin',
-                'count': {'$sum': 1}
+    try:
+        # Aggregate to count reviews per ASIN and get only top 3
+        pipeline = [
+            {
+                '$group': {
+                    '_id': '$asin',
+                    'count': {'$sum': 1}
+                }
+            },
+            {
+                '$project': {
+                    '_id': 0,  # Exclude _id
+                    'asin': '$_id',  # Rename _id to asin
+                    'count': 1
+                }
+            },
+            {
+                '$sort': {'count': -1}  # Sort by count in descending order
+            },
+            {
+                '$limit': 3  # Only get top 3 products
             }
-        },
-        {
-            '$project': {
-                '_id': 0,  # Exclude _id
-                'asin': '$_id',  # Rename _id to asin
-                'count': 1
-            }
-        },
-        {
-            '$sort': {'asin': 1}  # Sort by ASIN
-        }
-    ]
-    
-    asin_counts = list(collection.aggregate(pipeline))
-    
-    return jsonify(asin_counts)
+        ]
+        
+        asin_counts = list(collection.aggregate(pipeline))
+        return jsonify(asin_counts)
+    except Exception as e:
+        logger.error(f"Error in asin_review_counts: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/export')
 def export():
