@@ -3,7 +3,7 @@ import string
 from pyspark.sql.functions import udf, col
 from pyspark.sql.types import StringType, FloatType
 from textblob import TextBlob
-from pyspark.ml.feature import Tokenizer, HashingTF, IDF
+from pyspark.ml.feature import Tokenizer, HashingTF, IDF ,NGram, IDFModel
 from pyspark.ml import Pipeline
 
 # Liste des mots vides (stop words) utilisée dans le notebook
@@ -76,24 +76,31 @@ def preprocess_text(spark, text_data, include_polarity=True):
     else:
         df = text_data
 
-    # Nettoyage du texte
+    # # Nettoyage du texte
     df = df.withColumn("cleaned_text", clean_review_udf(col("text")))
     
-    # Suppression des mots vides
+    # # Suppression des mots vides
     df = df.withColumn("processed_text", remove_stopwords_udf(col("cleaned_text")))
     
     # Calcul de la polarité (optionnel)
     if include_polarity:
         df = df.withColumn("polarity", polarity_udf(col("processed_text")))
     
-    # Pipeline de transformation pour TF-IDF
+    # Step 4: Tokenize
     tokenizer = Tokenizer(inputCol="processed_text", outputCol="words")
-    hashing_tf = HashingTF(inputCol="words", outputCol="raw_features", numFeatures=10000)
-    idf = IDF(inputCol="raw_features", outputCol="tfidf")
+    df = tokenizer.transform(df)
     
-    # Créer et appliquer le pipeline
-    pipeline = Pipeline(stages=[tokenizer, hashing_tf, idf])
-    pipeline_model = pipeline.fit(df)
-    df_transformed = pipeline_model.transform(df)
+    # Step 5: Generate bigrams
+    ngram = NGram(n=2, inputCol="words", outputCol="bigrams")
+    df = ngram.transform(df)
+    
+    # Step 6: Apply HashingTF
+    hashing_tf = HashingTF(inputCol="bigrams", outputCol="raw_features", numFeatures=5000)
+    df = hashing_tf.transform(df)
+    idf_model_path = "/app/model/idf_model"
+    idf_model = IDFModel.load(idf_model_path)
+    
+    df_transformed = idf_model.transform(df)
+    
     
     return df_transformed
