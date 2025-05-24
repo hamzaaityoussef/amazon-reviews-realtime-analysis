@@ -56,3 +56,6 @@ docker-compose up --build
 - Automated sentiment analysis using machine learning
 - Scalable, containerized microservices architecture
 - Interactive dashboards for both real-time and offline analytics
+
+
+N.B : btw you may have probleme when cloning the project in the part of models (maybe corrupted) , if that's the case try to unzip the zip models in the folder \Zipped_Models into model folder and it will works ان شاء الله , good luck
