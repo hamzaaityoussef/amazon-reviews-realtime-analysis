@@ -1,25 +1,58 @@
-# 📊 Analyse en Temps Réel des Avis Amazon
+# 📊 Real-Time Amazon Reviews Sentiment Analysis
 
-Ce projet a pour but de créer un système de traitement en temps réel des commentaires Amazon pour déterminer leur polarité (positif, neutre, négatif), à l’aide de Kafka, Spark, MongoDB, Docker et d’un modèle de machine learning.
+This project is a real-time system for processing and analyzing Amazon product reviews to determine their sentiment (positive, neutral, negative) using Kafka, Spark, MongoDB, Docker, Machine Learning, and advanced visualization tools.
 
 ## 🧱 Architecture
 
-- **Kafka** pour le streaming des avis clients
-- **Spark (PySpark)** pour le traitement et l'entraînement des modèles
-- **MongoDB** pour le stockage des prédictions
-- **Flask** pour l'API Web (mode online)
-- **Dashboard offline** pour l'analyse globale
-- **Docker** pour conteneuriser l’ensemble
+- **Kafka** for real-time streaming of customer reviews
+- **Spark (PySpark + MLlib)** for distributed processing and sentiment analysis using machine learning models
+- **MongoDB** for storing predictions and processed data
+- **Flask** for the web API and real-time dashboard (using Chart.js)
+- **Power BI** for advanced business intelligence and offline analytics
+- **Docker** for containerizing all services and ensuring easy deployment
 
-## 🚀 Lancement du projet
+**Data Flow:**
+1. Amazon reviews are streamed into **Kafka**.
+2. **Spark Streaming** processes the data, applies ML models (sentiment analysis), and stores results in **MongoDB**.
+3. **Flask** web app fetches data from MongoDB and visualizes it in real-time using **Chart.js**.
+4. **Power BI** connects to MongoDB for advanced analytics and business dashboards.
 
-> À venir : docker-compose.yml
+## 🚀 Getting Started
 
-## 📁 Structure du projet
+> Use `docker-compose.yml` to launch the entire stack.
 
-- `kafka/` – scripts de publication/consommation
-- `spark/` – code de traitement ML
-- `api/` – serveur Flask
-- `dashboard/` – visualisations offline
-- `data/` – données téléchargées de Kaggle
-- `model/` – modèle ML sauvegardé
+```bash
+docker-compose up --build
+```
+
+## 📁 Project Structure
+
+- `kafka/` – Producer and consumer scripts for Kafka
+- `web/` – Flask web server and dashboard (Chart.js)
+- `data/` – Datasets and data loader scripts
+- `model/` – Saved ML models (Logistic Regression, TF-IDF, etc.)
+- `utils/` – Preprocessing and utility scripts
+- `notebooks/` – Jupyter notebooks for model training and experimentation
+- `PowerBI/` – power BI visualisation
+
+## 📊 Visualization
+
+- **Chart.js**: Real-time web dashboard for monitoring sentiment trends
+- **Power BI**: Advanced business intelligence dashboards connected to MongoDB
+
+## 👥 Team
+
+- Hamza ait youssef
+- Amina Louazir
+- Diae Khayati
+
+## 🛠️ Technologies
+
+- Python, Docker, Apache Kafka, Apache Spark, MongoDB, Flask, Chart.js, Power BI
+
+## 📌 Features
+
+- Real-time ingestion and processing of Amazon reviews
+- Automated sentiment analysis using machine learning
+- Scalable, containerized microservices architecture
+- Interactive dashboards for both real-time and offline analytics
